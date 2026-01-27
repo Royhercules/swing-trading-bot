@@ -3,28 +3,23 @@ name: Daily Swing Scan
 on:
   workflow_dispatch:
   schedule:
-    - cron: "15 10 * * 1-5"   # 3:45 PM IST
+    - cron: "15 10 * * 1-5"
 
 jobs:
   scan:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v4
         with:
           python-version: "3.10"
 
-      - name: Install dependencies
-        run: |
-          pip install yfinance pandas numpy matplotlib requests
+      - name: Install deps
+        run: pip install yfinance pandas numpy matplotlib requests
 
-      - name: Telegram Test
+      - name: Run Swing Scanner
         env:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-        run: |
-          python telegram_test.py
+        run: python swing_bot.py
