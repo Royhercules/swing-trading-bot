@@ -18,7 +18,7 @@ jobs:
       - name: Install deps
         run: pip install yfinance pandas numpy matplotlib requests
 
-      - name: Run Swing Scanner
+           - name: Run Swing Scanner
         env:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
