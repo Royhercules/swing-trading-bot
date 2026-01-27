@@ -2,8 +2,9 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import os
+import requests
 from datetime import datetime
-from mailer import send_email
 
 # ==============================
 # CONFIG
@@ -13,6 +14,26 @@ HOLD_DAYS = 30
 RR = 2
 MAX_RUNUP = 0.15
 TOP_N = 10
+
+TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN")
+TG_CHAT_ID = os.getenv("TG_CHAT_ID")
+
+# ==============================
+# STOCK UNIVERSE
+# ==============================
+nse_stocks = [
+    "360ONE.NS","3MINDIA.NS","ABB.NS","ACC.NS","ACMESOLAR.NS","AIAENG.NS",
+    "APLAPOLLO.NS","AUBANK.NS","AWL.NS","AADHARHFC.NS","AARTIIND.NS","AAVAS.NS",
+    "ABBOTINDIA.NS","ACE.NS","ADANIENSOL.NS","ADANIENT.NS","ADANIGREEN.NS","ADANIPORTS.NS",
+    "ADANIPOWER.NS","ATGL.NS","ABCAPITAL.NS","ABFRL.NS","ABLBL.NS","ABREL.NS","ABSLAMC.NS",
+    "AEGISLOG.NS","AEGISVOPAK.NS","AFCONS.NS","AFFLE.NS","AJANTPHARM.NS","AKUMS.NS","AKZOINDIA.NS",
+    "APLLTD.NS","ALKEM.NS","ALKYLAMINE.NS","ALOKINDS.NS","ARE&M.NS","AMBER.NS","AMBUJACEM.NS",
+    "ANANDRATHI.NS","ANANTRAJ.NS","ANGELONE.NS","APARINDS.NS","APOLLOHOSP.NS","APOLLOTYRE.NS",
+    "APTUS.NS","ASAHIINDIA.NS","ASHOKLEY.NS","ASIANPAINT.NS","ASTERDM.NS","ASTRAZEN.NS","ASTRAL.NS",
+    "ATHERENERG.NS","ATUL.NS","AUROPHARMA.NS","AIIL.NS","DMART.NS","AXISBANK.NS","BASF.NS",
+    # … rest of the symbols …
+    "ZYDUSLIFE.NS","ECLERX.NS"
+]
 
 # ==============================
 # HELPERS
@@ -58,24 +79,24 @@ def calc_sl_target(entry, support):
     target = entry + (entry - sl) * RR
     return round(sl,2), round(target,2)
 
-# ==============================
-# MARKET FILTERS
-# ==============================
 def market_ok():
     nifty = clean_ohlcv(yf.download("^NSEI", period="2y", progress=False))
     vix = clean_ohlcv(yf.download("^INDIAVIX", period="2y", progress=False))
-
     nifty["SMA200"] = nifty["Close"].rolling(200).mean()
-
-    return (
-        nifty["Close"].iloc[-1] > nifty["SMA200"].iloc[-1] and
-        vix["Close"].iloc[-1] < 20
-    )
+    return nifty["Close"].iloc[-1] > nifty["SMA200"].iloc[-1] and vix["Close"].iloc[-1] < 20
 
 # ==============================
-# STOCK UNIVERSE (TOP 500 SAFE)
+# TELEGRAM ALERTS
 # ==============================
-from universe import nse_stocks
+def send_telegram(message, charts=[]):
+    url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage"
+    if message:
+        requests.get(url, params={"chat_id": TG_CHAT_ID, "text": message, "parse_mode": "Markdown"})
+    # Send charts
+    for chart in charts:
+        url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendPhoto"
+        with open(chart, "rb") as f:
+            requests.post(url, files={"photo": f}, data={"chat_id": TG_CHAT_ID})
 
 # ==============================
 # MAIN SCAN
@@ -85,7 +106,7 @@ def run_scan():
     charts = []
 
     if not market_ok():
-        send_email([], [], market_fail=True)
+        send_telegram("🚫 *Swing Trades Skipped – Market Not Favorable*\nNIFTY below 200 SMA or VIX above 20.")
         return
 
     for symbol in nse_stocks:
@@ -120,17 +141,13 @@ def run_scan():
         plt.close()
 
         charts.append(fname)
-        signals.append({
-            "Symbol": symbol,
-            "Entry": entry,
-            "SL": sl,
-            "Target": target
-        })
+        signals.append(f"*{symbol}*\nEntry: {entry}\nSL: {sl}\nTarget: {target}")
 
         if len(signals) >= TOP_N:
             break
 
-    send_email(signals, charts)
+    if signals:
+        send_telegram("*📈 Swing Trade Signals (15–30 Days)*\n\n" + "\n\n".join(signals), charts)
 
 if __name__ == "__main__":
     run_scan()
